@@ -2,12 +2,13 @@ import os
 import requests
 import json
 import re
+import sys
 from shapely.geometry import shape, mapping
 
 ### Configuration
 
 output_filepath = "./Canyon County parcels.geojson"  # Filepath to save the merged GeoJSON
-min_features = 2000 # Try to grab at least this many features, if enough are available
+min_features = int(sys.argv[1]) # Try to grab at least this many features, if enough are available
 
 ### Mappings
 
@@ -38,7 +39,8 @@ SUFFIX_MAPPINGS = {
     "PKWY": "Parkway",
     "TRL": "Trail",
     "LOOP": "Loop",
-    "HWY": "Highway"
+    "HWY": "Highway",
+    "PT": "Point"
 }
 
 DIRECTIONAL_MAPPINGS = {
@@ -140,7 +142,7 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
         properties["addr:street"] = re.sub(r'\bMc(\w+)', lambda match: 'Mc' + match.group(1).title(), properties["addr:street"])
 
         # Remove errant space after Mc (common error in address datasets)
-        properties["addr:street"] = re.sub(r'\bMc\w', 'Mc', properties["addr:street"])
+        properties["addr:street"] = re.sub(r'Mc ', 'Mc', properties["addr:street"])
         
         # Capitalize ordinal numbers correctly, e.g., "South 1St Street" -> "South 1st Street"
         properties["addr:street"] = re.sub(r'(\d+)(St|Nd|Rd|Th)', lambda m: m.group(1) + m.group(2).lower(), properties["addr:street"])

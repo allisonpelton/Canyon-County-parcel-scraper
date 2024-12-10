@@ -17,3 +17,16 @@ This is a proof-of-concept at the moment, so no usage suppport will be provided.
 ## Requirements
 
 The scraper uses [**Requests**](https://docs.python-requests.org/en/latest/index.html) to get paginated parcel features and [**Shapely**](https://shapely.readthedocs.io/en/stable/manual.html) to get centroids from geometry.
+
+## To dos
+
+There is a huge number of edge cases yet to be handled. Some cases are so close to the edge that they're probably not even represented in this dataset. Below are the ones I've noticed looking at the output from scraping the entire parcel layer:
+
+* Handle fractional addresses (currently interpreted as part of street name)
+* Handle unit types (e.g., Suite, No, Unit, Trlr)
+  * Currently, these are wrongly expanded as directionals as "Southte" and "Northo"
+* Handle unit numbers represented as address suffixes (e.g., 398 A)
+* Handle multiple highway numbers (e.g., Highway 20/26)
+* Lowercase prepositions (e.g., "Of", "And") in street names.
+
+My end goal is to develop a framework to scrape parcel address information from other county assessor sites in Idaho, which will necessitate additional considerations.
