@@ -28,5 +28,7 @@ There is a huge number of edge cases yet to be handled. Some cases are so close 
 * Handle unit numbers represented as address suffixes (e.g., 398 A)
 * Handle multiple highway numbers (e.g., Highway 20/26)
 * Lowercase prepositions (e.g., "Of", "And") in street names.
+* Handle sequential suffixes (e.g., 10th Ave Cir)
+* Handle "Avenue X"-style names
 
 My end goal is to develop a framework to scrape parcel address information from other county assessor sites in Idaho, which will necessitate additional considerations.
