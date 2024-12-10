@@ -10,6 +10,10 @@ This is equal parts a demonstration of my coding ability, a demonstration of my 
 
 This program scrapes parcel geometry from an ArcGIS server using its REST API and outputs it in GeoJSON format. It is designed to generate only address data, so it queries only the relevant columns `SiteAddress` and `SiteCity`. It then applies postprocessing to convert the addresses to a more readable format.
 
+## Usage
+
+This is a proof-of-concept at the moment, so no usage suppport will be provided.
+
 ## Requirements
 
 The scraper uses [**Requests**](https://docs.python-requests.org/en/latest/index.html) to get paginated parcel features and [**Shapely**](https://shapely.readthedocs.io/en/stable/manual.html) to get centroids from geometry.
