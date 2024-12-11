@@ -7,7 +7,7 @@ from shapely.geometry import shape, mapping
 
 ### Configuration
 
-output_filepath = "./Boise County parcels.geojson"  # Filepath to save the merged GeoJSON
+output_filepath = "./Canyon County parcels.geojson"  # Filepath to save the merged GeoJSON
 min_features = int(sys.argv[1]) # Try to grab at least this many features, if enough are available
 
 ### Mappings
@@ -58,12 +58,12 @@ def fetch_page(result_offset):
     """
     Sends a GET request for parcels in GeoJSON format. Requests fields SiteAddress and SiteCity, comprising all address information available for the parcels.
     """
-    url = f"https://services.arcgis.com/91hXl6NfvLGEi8x5/arcgis/rest/services/Boise_County_Parcels/FeatureServer/0/query"
+    url = f"https://maps.canyonco.org/arcgisserver/rest/services/Assessor/CCPublicTaxparcels/MapServer/0/query"
     params = {
         "f": "geojson",
         "where": "1=1",
         "returnGeometry": "true",
-        "outFields": "ANMPROPAD1,ANMPROPAD2",
+        "outFields": "SiteAddress,SiteCity",
         "outSR": 3857, # WGS 84
         "resultOffset": f"{result_offset}"
     }
@@ -94,24 +94,20 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
     for feature in features:
         properties = feature["properties"]
     
-        # Parse ANMPROPAD1 into house number and street name
-        address = properties["ANMPROPAD1"]
+        if CITY_MAPPINGS.get(properties["SiteCity"]):
+            properties["addr:city"] = CITY_MAPPINGS[properties["SiteCity"]]
+            del properties["SiteCity"]
+        
+        # Parse SiteAddress into house number and street name
+        address = properties["SiteAddress"]
         if address is None:
             continue
         properties["addr:housenumber"], properties["addr:street"] = (None, None) if len(parts:=(address.split(' ', 1))) < 2 else (parts[0], parts[1]) #None if invalid
-        del properties["ANMPROPAD1"] # Not used in the output
+        del properties["SiteAddress"] # Not used in the output
         
         # Only keep features with a valid housenumber
         if properties["addr:housenumber"] == "0" or properties["addr:housenumber"] is None:
             continue
-
-        # Parse ANMPROPAD2 (format: CITY ST ZIP-0000) 
-        ## Currently assuming ANMPROPAD2 is in the correct format if ANMPROPAD1 exists
-        properties["addr:postcode"] = properties["ANMPROPAD2"][-11:-6] ## Grab chars -11 through -6 for addr:postcode
-        line2 = properties["ANMPROPAD2"].split()
-        properties["addr:city"] = ' '.join(line2[:line2.index("ID")]).title() ## City name is all words before ST, in this case ID
-
-        del properties["ANMPROPAD2"]
 
         # Remove probable unit numbers/letters from street name and flag them. Trailing numbers, except on highways, and trailing single letters are probably units.
         if "addr:street" in properties and properties["addr:street"].find("HWY") == -1:
