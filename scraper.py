@@ -96,21 +96,26 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
     
         # Parse ANMPROPAD1 into house number and street name
         address = properties["ANMPROPAD1"]
+        address = re.sub("\s+"," ",address)
         if address is None:
             continue
         properties["addr:housenumber"], properties["addr:street"] = (None, None) if len(parts:=(address.split(' ', 1))) < 2 else (parts[0], parts[1]) #None if invalid
         del properties["ANMPROPAD1"] # Not used in the output
         
         # Only keep features with a valid housenumber
-        if properties["addr:housenumber"] == "0" or properties["addr:housenumber"] is None:
+        if properties["addr:housenumber"] == "0" or properties["addr:housenumber"] is None or properties["addr:housenumber"] == "":
             continue
 
         # Parse ANMPROPAD2 (format: CITY ST ZIP-0000) 
-        ## Currently assuming ANMPROPAD2 is in the correct format if ANMPROPAD1 exists
-        properties["addr:postcode"] = properties["ANMPROPAD2"][-11:-6] ## Grab chars -11 through -6 for addr:postcode
+        # Currently assuming ANMPROPAD2 is in the correct format if ANMPROPAD1 exists
+        properties["addr:postcode"] = properties["ANMPROPAD2"][-10:-5] ## ZIP code is not always present! TODO: Detect this
         line2 = properties["ANMPROPAD2"].split()
-        properties["addr:city"] = ' '.join(line2[:line2.index("ID")]).title() ## City name is all words before ST, in this case ID
 
+        # ANMPROPAD2 not guaranteed to be in correct format
+        if "ID" in line2:
+            properties["addr:city"] = ' '.join(line2[:line2.index("ID")]).title() ## City name is all words before ST, in this case ID
+        else:
+            continue 
         del properties["ANMPROPAD2"]
 
         # Remove probable unit numbers/letters from street name and flag them. Trailing numbers, except on highways, and trailing single letters are probably units.
@@ -120,6 +125,10 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
                 properties["addr:unit"] = match.group(1)
                 properties["addr:street"] = properties["addr:street"][:match.start()].strip()
         
+        # Remove extraneous plus signs
+        properties["addr:street"] = re.sub(" \+ "," ",properties["addr:street"])
+        properties["addr:street"] = re.sub(" \+","",properties["addr:street"])
+
         # Generate capture groups for suffixes and directionals
         directionals = '|'.join(re.escape(direction) for direction in DIRECTIONAL_MAPPINGS.keys())
         suffixes = '|'.join(re.escape(abbr) for abbr in SUFFIX_MAPPINGS.keys())
