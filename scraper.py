@@ -7,25 +7,12 @@ from shapely.geometry import shape, mapping
 
 ### Configuration
 
-output_filepath = "./Boise County parcels.geojson"  # Filepath to save the merged GeoJSON
+output_filepath = "./Elmore County parcels.geojson"  # Filepath to save the merged GeoJSON
 min_features = int(sys.argv[1]) # Try to grab at least this many features, if enough are available
 
 ### Mappings
 
-CITY_MAPPINGS = {
-    'CA': 'Caldwell',
-    'MI': 'Middleton',
-    'NA': 'Nampa',
-    'PA': 'Payette',
-    'NO': 'Notus',
-    'WI': 'Wilder',
-    'ST': 'Star',
-    'GR': 'Greenleaf',
-    'KU': 'Kuna',
-    'ME': 'Melba'
-}
-
-SUFFIX_MAPPINGS = {
+ABBR_MAPPINGS = {
     "BLVD": "Boulevard",
     "ST": "Street",
     "DR": "Drive",
@@ -40,7 +27,16 @@ SUFFIX_MAPPINGS = {
     "TRL": "Trail",
     "LOOP": "Loop",
     "HWY": "Highway",
-    "PT": "Point"
+    "PT": "Point",
+    "WY": "Way",
+    "RNCH": "Ranch",
+    "CRK": "Creek",
+    "MTN": "Mountain",
+    "RES": "Reservoir",
+    "AM": "American",
+    "GV": "Grandview",
+    "FV": "Featherville",
+    "KH": "King Hill"
 }
 
 DIRECTIONAL_MAPPINGS = {
@@ -58,12 +54,13 @@ def fetch_page(result_offset):
     """
     Sends a GET request for parcels in GeoJSON format. Requests fields SiteAddress and SiteCity, comprising all address information available for the parcels.
     """
-    url = f"https://services.arcgis.com/91hXl6NfvLGEi8x5/arcgis/rest/services/Boise_County_Parcels/FeatureServer/0/query"
+    service = "Elmore_County_Parcels"
+    url = f"https://services.arcgis.com/91hXl6NfvLGEi8x5/arcgis/rest/services/{service}/FeatureServer/0/query"
     params = {
         "f": "geojson",
         "where": "1=1",
         "returnGeometry": "true",
-        "outFields": "ANMPROPAD1,ANMPROPAD2",
+        "outFields": "PM_PROP_AD,PM_PROP_ZP",
         "outSR": 3857, # WGS 84
         "resultOffset": f"{result_offset}"
     }
@@ -88,53 +85,64 @@ all_features = []
 result_offset = 0
 
 # Fetch pages until we receive an empty page or have fetched the desired number of features.
-while (features := fetch_page(result_offset)) and result_offset < min_features and len(features) != 0:
+while result_offset < min_features and (features := fetch_page(result_offset)) and len(features) != 0:
     result_offset += len(features)
     # Process the features and apply the necessary parsing
     for feature in features:
         properties = feature["properties"]
     
-        # Parse ANMPROPAD1 into house number and street name
-        address = properties["ANMPROPAD1"]
+        # Parse PM_PROP_AD into house number and street name
+        address = properties["PM_PROP_AD"]
+        
+        #Remove extra spaces
         address = re.sub("\s+"," ",address)
+        address = re.sub("\s$","",address)
+
+        ### Data validation
         if address is None:
             continue
         properties["addr:housenumber"], properties["addr:street"] = (None, None) if len(parts:=(address.split(' ', 1))) < 2 else (parts[0], parts[1]) #None if invalid
-        del properties["ANMPROPAD1"] # Not used in the output
+        
         
         # Only keep features with a valid housenumber
-        if properties["addr:housenumber"] == "0" or properties["addr:housenumber"] is None or properties["addr:housenumber"] == "":
+        if properties["addr:housenumber"] == "0" or properties["addr:housenumber"] is None or properties["addr:housenumber"] == "" or properties["addr:housenumber"][0] not in "123456789":
             continue
 
-        # Parse ANMPROPAD2 (format: CITY ST ZIP-0000) 
-        # Currently assuming ANMPROPAD2 is in the correct format if ANMPROPAD1 exists
-        properties["addr:postcode"] = properties["ANMPROPAD2"][-10:-5] ## ZIP code is not always present! TODO: Detect this
-        line2 = properties["ANMPROPAD2"].split()
+        properties["addr:postcode"] = properties["PM_PROP_ZP"]
 
-        # ANMPROPAD2 not guaranteed to be in correct format
-        if "ID" in line2:
-            properties["addr:city"] = ' '.join(line2[:line2.index("ID")]).title() ## City name is all words before ST, in this case ID
-        else:
-            continue 
-        del properties["ANMPROPAD2"]
+        ### Column Cleanup
+        del properties["PM_PROP_AD"] # Not used in the output
+        del properties["PM_PROP_ZP"]
+
+        ### Address parsing
+
+        # A leading number in addr:street is likely a unit number
+        start = properties["addr:street"].split()
+        if start[0].isnumeric() or len(start[0]) == 1 and start[0] in "ABCDFGHIJKLMOPQRTUVXYZ":
+            properties["addr:street"] = ' '.join(start[1:])
+            properties["addr:unit"] = start[0]
 
         # Remove probable unit numbers/letters from street name and flag them. Trailing numbers, except on highways, and trailing single letters are probably units.
         if "addr:street" in properties and properties["addr:street"].find("HWY") == -1:
-            match = re.search(r"\s([A-D]|\d+)$", properties["addr:street"])
+            match = re.search(r"\s([A-D]|\d+)$", properties["addr:street"]) # Ideally we would match all trailing letters, but E cannot be disambiguated as a unit or postdirectional
             if match:
                 properties["addr:unit"] = match.group(1)
                 properties["addr:street"] = properties["addr:street"][:match.start()].strip()
-        
+            
+            ### Add missing "Street" suffix present in Elmore County dataset
+            if properties["addr:street"].split()[-1] not in ABBR_MAPPINGS and properties["addr:street"].split()[-1] not in DIRECTIONAL_MAPPINGS.values() and properties["addr:street"].split()[-1] not in DIRECTIONAL_MAPPINGS.keys():
+                properties["addr:street"] = properties["addr:street"] + " Street"
+
         # Remove extraneous plus signs
         properties["addr:street"] = re.sub(" \+ "," ",properties["addr:street"])
         properties["addr:street"] = re.sub(" \+","",properties["addr:street"])
 
         # Generate capture groups for suffixes and directionals
         directionals = '|'.join(re.escape(direction) for direction in DIRECTIONAL_MAPPINGS.keys())
-        suffixes = '|'.join(re.escape(abbr) for abbr in SUFFIX_MAPPINGS.keys())
+        suffixes = '|'.join(re.escape(abbr) for abbr in ABBR_MAPPINGS.keys())
 
         # Expand suffixes followed by a postdirectional, e.g., "17th Ave S" -> "17th Avenue South"
-        properties["addr:street"] = re.sub(rf' ({suffixes}) ({directionals})', lambda m: ' ' + SUFFIX_MAPPINGS[m.group(1)] + ' ' + DIRECTIONAL_MAPPINGS[m.group(2)], properties["addr:street"])
+        properties["addr:street"] = re.sub(rf' ({suffixes}) ({directionals})', lambda m: ' ' + ABBR_MAPPINGS[m.group(1)] + ' ' + DIRECTIONAL_MAPPINGS[m.group(2)], properties["addr:street"])
 
         # Expand predirectionals
         properties["addr:street"] = re.sub(rf'^({directionals}) ', lambda m: DIRECTIONAL_MAPPINGS[m.group(1)] + ' ', properties["addr:street"])
@@ -142,11 +150,9 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
         # Expand postdirectionals
         properties["addr:street"] = re.sub(rf' ({directionals})$', lambda m: ' ' + DIRECTIONAL_MAPPINGS[m.group(1)], properties["addr:street"])
         
-        # Expand all other suffixes
-        properties["addr:street"] = re.sub(rf'\b({suffixes})\b$', lambda m: SUFFIX_MAPPINGS.get(m.group(0), m.group(0)), properties["addr:street"])
-
-        # Expand "highway" infix, e.g., "OLD HWY 30" -> "OLD Highway 30"
-        properties["addr:street"] = re.sub('HWY', 'Highway', properties["addr:street"])
+        # Expand all other suffixes (may appear as infixes as well)
+        # May incorrectly expand Saint to Street
+        properties["addr:street"] = re.sub(rf'\b({suffixes})\b', lambda m: ABBR_MAPPINGS.get(m.group(0), m.group(0)), properties["addr:street"])
 
         # Convert to title case
         properties["addr:street"] = properties["addr:street"].title()
@@ -159,6 +165,8 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
         
         # Capitalize ordinal numbers correctly, e.g., "South 1St Street" -> "South 1st Street"
         properties["addr:street"] = re.sub(r'(\d+)(St|Nd|Rd|Th)', lambda m: m.group(1) + m.group(2).lower(), properties["addr:street"])
+
+        ### Geometry handling
 
         # Replace the original geometry with the centroid (as a point)
         feature["geometry"] = mapping(shape(feature["geometry"]).centroid)
