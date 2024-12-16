@@ -7,7 +7,7 @@ from shapely.geometry import shape, mapping
 
 ### Configuration
 
-output_filepath = "./Canyon County parcels.geojson"  # Filepath to save the merged GeoJSON
+output_filepath = "./Owyhee County parcels.geojson"  # Filepath to save the merged GeoJSON
 min_features = int(sys.argv[1]) # Try to grab at least this many features, if enough are available
 
 ### Mappings
@@ -40,7 +40,10 @@ SUFFIX_MAPPINGS = {
     "TRL": "Trail",
     "LOOP": "Loop",
     "HWY": "Highway",
-    "PT": "Point"
+    "PT": "Point",
+    "MIN": "Mine",
+    "RTE": "Route",
+    "EXT": "Extension"
 }
 
 DIRECTIONAL_MAPPINGS = {
@@ -58,12 +61,12 @@ def fetch_page(result_offset):
     """
     Sends a GET request for parcels in GeoJSON format. Requests fields SiteAddress and SiteCity, comprising all address information available for the parcels.
     """
-    url = f"https://maps.canyonco.org/arcgisserver/rest/services/Assessor/CCPublicTaxparcels/MapServer/0/query"
+    url = f"https://services.arcgis.com/91hXl6NfvLGEi8x5/arcgis/rest/services/OwyheeCountyParcels_102123/FeatureServer/3/query"
     params = {
         "f": "geojson",
         "where": "1=1",
         "returnGeometry": "true",
-        "outFields": "SiteAddress,SiteCity",
+        "outFields": "Situs",
         "outSR": 3857, # WGS 84
         "resultOffset": f"{result_offset}"
     }
@@ -93,17 +96,40 @@ while (features := fetch_page(result_offset)) and result_offset < min_features a
     # Process the features and apply the necessary parsing
     for feature in features:
         properties = feature["properties"]
-    
-        if CITY_MAPPINGS.get(properties["SiteCity"]):
-            properties["addr:city"] = CITY_MAPPINGS[properties["SiteCity"]]
-            del properties["SiteCity"]
         
-        # Parse SiteAddress into house number and street name
-        address = properties["SiteAddress"]
-        if address is None:
+        # Parse Situs into all fields (format: NUMBER STREET, (UNIT,) CITY, ID ZIP)
+        address = properties["Situs"]
+        if address is None or address == " " or len(address) < 6: #The shortest address we would attempt parsing would be "1 A ST"
             continue
-        properties["addr:housenumber"], properties["addr:street"] = (None, None) if len(parts:=(address.split(' ', 1))) < 2 else (parts[0], parts[1]) #None if invalid
-        del properties["SiteAddress"] # Not used in the output
+        
+        ### Some values may be missing so we need multiple parse strategies
+        # Some addresses only have the first line (NUMBER STREET)
+        if address.count(',')==0:
+            properties["addr:housenumber"]=address.split()[0]
+            properties["addr:street"]=' '.join(address.split()[1:])
+        # Double space between city and state (no comma)
+        if address.count(',')==1:
+            line1,line2=address.split(',')
+            properties["addr:housenumber"]=line1.strip().split()[0]
+            properties["addr:street"]=' '.join(line1.strip().split()[1:])
+            properties["addr:postcode"]=line2[-5:]
+            properties["addr:city"]=' '.join(line2.split()[:-2]).title() #All but last two words, which are state and zip
+        # Standard format
+        if address.count(',')==2:
+            line1,properties["addr:city"],line3=address.split(',')
+            properties["addr:housenumber"]=line1.strip().split()[0]
+            properties["addr:street"]=' '.join(line1.strip().split()[1:])
+            properties["addr:postcode"]=line3[-5:]
+            properties["addr:city"]=properties["addr:city"].strip().title()
+        # Unit number
+        if address.count(',')==3:
+            line1,properties["addr:unit"],properties["addr:city"],line3=address.split(',')
+            properties["addr:housenumber"]=line1.strip().split()[0]
+            properties["addr:street"]=' '.join(line1.strip().split()[1:])
+            properties["addr:postcode"]=line3[-5:]
+            properties["addr:city"]=properties["addr:city"].strip().title()
+
+        del properties["Situs"] # Not used in the output
         
         # Only keep features with a valid housenumber
         if properties["addr:housenumber"] == "0" or properties["addr:housenumber"] is None:

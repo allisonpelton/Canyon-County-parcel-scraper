@@ -1,34 +1,44 @@
-# Canyon County Parcel Scraper
+# Owyhee County Parcel Scraper
 
-## Introduction
+## Information
 
-Many counties in Idaho still do not offer an open data portal with address information. In many cases this is not due to technological limitations, but a simple lack of desire to publish the data. However, I find this information invaluable for personal research. As such, I decided to build a scraper for the Canyon County Assessor's map.
+Idaho's largest county. Home to the most remote cabin in the lower 48, at 45 Ranch.
 
-This is equal parts a demonstration of my coding ability, a demonstration of my drive to solve real problems, and a protest against the closed nature of many municipal datasets with immense public utility.
+## Format
 
-## Functionality
+Parcel address info is provided in a single field, `Situs`. It comes in the format `{NUMBER} {STREET},( {UNIT},) {CITY} {ST}, {ZIP}`. A few parcels only have the number and street and a few others have two spaces between the state and ZIP code instead of a comma followed by a space.
 
-This program scrapes parcel geometry from an ArcGIS server using its REST API and outputs it in GeoJSON format. It is designed to generate only address data, so it queries only the relevant columns `SiteAddress` and `SiteCity`. It then applies postprocessing to convert the addresses to a more readable format.
+## Issues
 
-## Usage
+### Street grids
 
-This is a proof-of-concept at the moment, so no usage suppport will be provided.
+The numbered street grids of both Marsing and Homedale use directionals inconsistently. This is reflected in the variety of street name representations in the database. In Marsing, North–South avenues take both a pre and postdirectional (except for 9th Avenue), while East–West streets take only a postdirectional. In Homedale, all numbered streets (going North–South) take both a predirectional and postdirectional. Such addresses are few enough to not merit a programmatic fix, i.e., you will need to clean this up manually.
 
-## Requirements
+### Missing suffixes
 
-The scraper uses [**Requests**](https://docs.python-requests.org/en/latest/index.html) to get paginated parcel features and [**Shapely**](https://shapely.readthedocs.io/en/stable/manual.html) to get centroids from geometry.
+A handful of roads are missing their "Road" suffix. This could be fixed in processing but there are few enough such addresses to merit doing so.
 
-## To dos
+### Minor data entry errors
 
-There is a huge number of edge cases yet to be handled. Some cases are so close to the edge that they're probably not even represented in this dataset. Below are the ones I've noticed looking at the output from scraping the entire parcel layer:
+As per usual, there are a few dozen data entry errors that require manual correction. Some ZIP codes are wrong, some city names and street names are misspelled, etc.
 
-* Handle fractional addresses (currently interpreted as part of street name)
-* Handle unit types (e.g., Suite, No, Unit, Trlr)
-  * Currently, these are wrongly expanded as directionals as "Southte" and "Northo"
-* Handle unit numbers represented as address suffixes (e.g., 398 A)
-* Handle multiple highway numbers (e.g., Highway 20/26)
-* Lowercase prepositions (e.g., "Of", "And") in street names.
-* Handle sequential suffixes (e.g., 10th Ave Cir)
-* Handle "Avenue X"-style names
+### City name, postcodes
 
-My end goal is to develop a framework to scrape parcel address information from other county assessor sites in Idaho, which will necessitate additional considerations.
+The city listed in the dataset is not always the approved postal city. Postal city and ZIP code should always match one of the following.
+
+| City name | ZIP code |
+| ---------- | -------- |
+| Bruneau | 83604 |
+| Buhl* | 83316 |
+| Grand View | 83624 |
+| Hammett | 83627 |
+| Homedale | 83628 |
+| Marsing | 83639 |
+| Melba | 83641 |
+| Owyhee, Nevada† | 89832 |
+| Rogerson | 83302 |
+| South Mountain† | 97910 |
+
+\*Not present in the dataset due to missing fields
+
+†ZIP code originates outside Idaho
