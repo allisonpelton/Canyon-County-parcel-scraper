@@ -12,19 +12,6 @@ min_features = int(sys.argv[1]) # Try to grab at least this many features, if en
 
 ### Mappings
 
-CITY_MAPPINGS = {
-    'CA': 'Caldwell',
-    'MI': 'Middleton',
-    'NA': 'Nampa',
-    'PA': 'Payette',
-    'NO': 'Notus',
-    'WI': 'Wilder',
-    'ST': 'Star',
-    'GR': 'Greenleaf',
-    'KU': 'Kuna',
-    'ME': 'Melba'
-}
-
 SUFFIX_MAPPINGS = {
     "BLVD": "Boulevard",
     "ST": "Street",
